@@ -6,6 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>ECST Weekly Order Form</title>
+<!-- SheetJS for Excel export -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --green: #1A5C38;
@@ -264,7 +266,7 @@
 <div class="page-pad"></div>
 <div class="action-bar">
   <button class="btn btn-clear" onclick="clearAll()">Clear all</button>
-  <button class="btn btn-email" onclick="emailForm()">&#9993;&nbsp; Email to Manager</button>
+  <button class="btn btn-email" onclick="exportAndEmail()">&#9993;&nbsp; Email to Manager</button>
 </div>
 <script>
 const SECTIONS = [
@@ -344,7 +346,6 @@ const SECTIONS = [
   ]},
 ];
 
-function fmt(n){return n===0?"—":"$"+Math.round(n).toLocaleString("en-US");}
 function fmtAlways(n){return "$"+Math.round(n).toLocaleString("en-US");}
 function getV(id){return parseInt(document.getElementById(id)?.value)||0;}
 
@@ -402,46 +403,124 @@ function clearAll(){
   recalc();
 }
 
-function emailForm(){
-  const date=document.getElementById("event-date").value;
-  const by=document.getElementById("completed-by").value||"(not specified)";
-  const fmtDate=date?new Date(date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"}):"(no date)";
-  let body="EAST COAST STREET TACOS\nWeekly Order Form\n";
-  body+="Week of: "+fmtDate+"\nCompleted by: "+by+"\n";
-  body+="=".repeat(60)+"\n\n";
-  let gInv=0,gOrd=0,hasData=false;
+/* ── Excel export + email ── */
+function exportAndEmail(){
+  const date = document.getElementById("event-date").value;
+  const by   = document.getElementById("completed-by").value || "(not specified)";
+  const fmtDate = date
+    ? new Date(date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})
+    : "(no date)";
+
+  // Check SheetJS loaded
+  if(typeof XLSX === "undefined"){
+    alert("Excel library not loaded yet. Please wait a moment and try again.");
+    return;
+  }
+
+  // ── Build workbook ──
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: All Items (full detail)
+  const allRows = [];
+  // Title rows
+  allRows.push(["EAST COAST STREET TACOS — Weekly Order Form"]);
+  allRows.push(["Week of:", fmtDate, "", "Completed by:", by]);
+  allRows.push([]);
+  // Header row
+  allRows.push(["Section","Item","Unit","Unit Price","In Stock (Qty)","In Stock Value","To Order (Cases)","Order Value"]);
+
+  let hasData = false;
+  let gInv = 0, gOrd = 0;
+
   SECTIONS.forEach((sec,si)=>{
-    const lines=[];
-    let sInv=0,sOrd=0;
+    let sInv=0, sOrd=0;
     sec.items.forEach((item,ii)=>{
-      const p=item.p||0;
-      const iv=getV("inv-"+si+"-"+ii);
-      const ov=getV("ord-"+si+"-"+ii);
-      if(iv||ov){
-        hasData=true;
-        const ivStr=iv?"Qty: "+iv+" ("+fmtAlways(iv*p)+")":"—";
-        const ovStr=ov?"Ord: "+ov+" ("+fmtAlways(ov*p)+")":"—";
-        const priceStr=p?"$"+p+"/unit":"price TBD";
-        lines.push("  "+item.n.substring(0,28).padEnd(29)+" ["+priceStr.padEnd(10)+"]  In Stock: "+ivStr.padEnd(18)+" To Order: "+ovStr);
-        sInv+=iv*p; sOrd+=ov*p;
+      const p  = item.p || 0;
+      const iv = getV("inv-"+si+"-"+ii);
+      const ov = getV("ord-"+si+"-"+ii);
+      if(iv || ov) hasData = true;
+      const ivVal = iv * p;
+      const ovVal = ov * p;
+      sInv += ivVal; sOrd += ovVal;
+      gInv += ivVal; gOrd += ovVal;
+      allRows.push([
+        sec.name,
+        item.n,
+        item.u,
+        p || "TBD",
+        iv || "",
+        iv && p ? ivVal : "",
+        ov || "",
+        ov && p ? ovVal : ""
+      ]);
+    });
+    // Section subtotal row
+    allRows.push(["","","","","Section Total →", sInv, "", sOrd]);
+    allRows.push([]);
+  });
+
+  // Grand total rows
+  allRows.push(["","","","","","GRAND IN-STOCK VALUE", "", gInv]);
+  allRows.push(["","","","","","GRAND ORDER VALUE",    "", gOrd]);
+
+  if(!hasData){
+    alert("Please fill in at least one item before exporting.");
+    return;
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(allRows);
+
+  // Column widths
+  ws["!cols"] = [
+    {wch:20},{wch:28},{wch:14},{wch:12},{wch:16},{wch:16},{wch:18},{wch:14}
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, "Order Form");
+
+  // Sheet 2: Order Summary (only items with qty > 0)
+  const sumRows = [];
+  sumRows.push(["EAST COAST STREET TACOS — Order Summary"]);
+  sumRows.push(["Week of:", fmtDate, "", "Completed by:", by]);
+  sumRows.push([]);
+  sumRows.push(["Section","Item","Unit","Unit Price","To Order (Cases)","Order Value"]);
+  SECTIONS.forEach((sec,si)=>{
+    sec.items.forEach((item,ii)=>{
+      const p  = item.p || 0;
+      const ov = getV("ord-"+si+"-"+ii);
+      if(ov > 0){
+        sumRows.push([sec.name, item.n, item.u, p || "TBD", ov, ov * p]);
       }
     });
-    if(lines.length){
-      body+="[ "+sec.name.toUpperCase()+" ]\n";
-      body+=lines.join("\n")+"\n";
-      body+="  Section In-Stock Value: "+fmtAlways(sInv)+"   Section Order Value: "+fmtAlways(sOrd)+"\n\n";
-      gInv+=sInv; gOrd+=sOrd;
-    }
   });
-  if(!hasData){ alert("Please fill in at least one item before emailing."); return; }
-  body+="=".repeat(60)+"\n";
-  body+="GRAND TOTAL — IN STOCK VALUE:  "+fmtAlways(gInv)+"\n";
-  body+="GRAND TOTAL — ORDER VALUE:     "+fmtAlways(gOrd)+"\n";
-  body+="\n— Sent from ECST Weekly Order Form";
-  const subject=encodeURIComponent("ECST Weekly Order — "+fmtDate+(by!="(not specified)"?" — "+by:""));
-  window.location.href="mailto:jvisintin@eastcoaststreettacos.com?subject="+subject+"&body="+encodeURIComponent(body);
+  sumRows.push([]);
+  sumRows.push(["","","","","TOTAL ORDER VALUE →", gOrd]);
+  const ws2 = XLSX.utils.aoa_to_sheet(sumRows);
+  ws2["!cols"] = [{wch:20},{wch:28},{wch:14},{wch:12},{wch:18},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws2, "Order Summary");
+
+  // ── Generate filename ──
+  const dateSlug = date ? date.replace(/-/g,"") : "nodate";
+  const fileName = "ECST_Order_" + dateSlug + ".xlsx";
+
+  // ── Download the .xlsx file ──
+  XLSX.writeFile(wb, fileName);
+
+  // ── Open email client after short delay (let download start) ──
+  setTimeout(()=>{
+    const subject = encodeURIComponent("ECST Weekly Order — " + fmtDate + (by !== "(not specified)" ? " — " + by : ""));
+    const body = encodeURIComponent(
+      "Hi,\n\nPlease find this week's order form attached as an Excel file (" + fileName + ").\n\n" +
+      "Week of: " + fmtDate + "\n" +
+      "Completed by: " + by + "\n" +
+      "In-Stock Value: " + fmtAlways(gInv) + "\n" +
+      "Order Total: " + fmtAlways(gOrd) + "\n\n" +
+      "— Sent from ECST Weekly Order Form"
+    );
+    window.location.href = "mailto:jvisintin@eastcoaststreettacos.com?subject=" + subject + "&body=" + body;
+  }, 800);
 }
 
+/* ── Build DOM ── */
 const fb=document.getElementById("form-body");
 SECTIONS.forEach((sec,si)=>{
   const wrap=document.createElement("div");
