@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>ECST Weekly Order Form</title>
+<style>
+  :root {
+    --green: #1A5C38;
+    --green-mid: #2E8B57;
+    --green-light: #e8f5ee;
+    --orange: #E8720C;
+    --inv: #fffbeb;
+    --inv-border: #f59e0b;
+    --ord: #eff6ff;
+    --ord-border: #3b82f6;
+    --border: #e5e7eb;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --row-alt: #fafafa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    background: #ececec;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 200;
+    background: var(--green);
+    padding: 10px 16px 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .topbar-title { color: #fff; font-size: 17px; font-weight: 700; }
+  .topbar-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top:1px; }
+  .topbar-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .field-group { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 140px; }
+  .field-label { color: rgba(255,255,255,0.8); font-size: 11px; white-space: nowrap; }
+  .field-input {
+    flex: 1; height: 30px; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px;
+    padding: 0 8px; font-size: 12px; background: rgba(255,255,255,0.15);
+    color: #fff; outline: none; min-width: 0;
+  }
+  .field-input::placeholder { color: rgba(255,255,255,0.45); }
+  .field-input::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.7; }
+  .grand-summary {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; padding: 10px 12px;
+    background: #fff; border-bottom: 2px solid var(--border);
+  }
+  .gs-card {
+    border-radius: 9px; padding: 10px 12px;
+    display: flex; flex-direction: column;
+  }
+  .gs-card.inv { background: var(--inv); border: 1.5px solid var(--inv-border); }
+  .gs-card.ord { background: var(--ord); border: 1.5px solid var(--ord-border); }
+  .gs-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .gs-card.inv .gs-label { color: #92400e; }
+  .gs-card.ord .gs-label { color: #1d4ed8; }
+  .gs-value { font-size: 22px; font-weight: 700; margin-top: 3px; }
+  .gs-card.inv .gs-value { color: #78350f; }
+  .gs-card.ord .gs-value { color: #1e3a8a; }
+  .gs-sub { font-size: 10px; margin-top: 2px; color: var(--muted); }
+  .legend {
+    display: flex; gap: 16px; padding: 6px 14px;
+    background: #fff; border-bottom: 1px solid var(--border);
+  }
+  .leg { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .leg-dot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .leg-dot.inv { background: var(--inv); border: 1.5px solid var(--inv-border); }
+  .leg-dot.ord { background: var(--ord); border: 1.5px solid var(--ord-border); }
+  .section { background: #fff; margin-bottom: 6px; border-radius: 0; overflow: hidden; }
+  .sec-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; cursor: pointer;
+    background: var(--green); user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .sec-title { color: #fff; font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
+  .sec-right { display: flex; align-items: center; gap: 8px; }
+  .sec-subtotal { font-size: 10px; color: rgba(255,255,255,0.75); text-align: right; line-height: 1.4; }
+  .chevron { color: rgba(255,255,255,0.85); font-size: 10px; transition: transform 0.18s; }
+  .sec-header.collapsed .chevron { transform: rotate(-90deg); }
+  .col-hdr {
+    display: grid;
+    grid-template-columns: 1fr 46px 52px 58px 52px 58px;
+    padding: 5px 14px 5px 14px;
+    background: #f3f7f5;
+    border-bottom: 1px solid var(--border);
+    gap: 2px;
+  }
+  .ch { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); text-align: center; line-height: 1.3; }
+  .ch:first-child { text-align: left; color: var(--green); }
+  .ch.inv-hdr { color: #b45309; }
+  .ch.ord-hdr { color: #1d4ed8; }
+  .ch.val-hdr { color: #374151; }
+  .sec-body { overflow: hidden; }
+  .sec-body.collapsed { display: none; }
+  .item-row {
+    display: grid;
+    grid-template-columns: 1fr 46px 52px 58px 52px 58px;
+    align-items: center;
+    min-height: 50px;
+    border-bottom: 1px solid #f0f0f0;
+    padding: 0 14px;
+    gap: 2px;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-row.alt { background: var(--row-alt); }
+  .item-info { padding: 5px 0; }
+  .item-name { font-size: 12px; font-weight: 500; color: var(--text); line-height: 1.3; }
+  .item-sub { font-size: 9px; color: var(--muted); margin-top: 1px; }
+  .price-cell {
+    text-align: center; font-size: 11px; font-weight: 600; color: #374151;
+    padding: 2px;
+  }
+  .cell { display: flex; justify-content: center; align-items: center; }
+  input[type=number] {
+    width: 48px; height: 38px;
+    border-radius: 7px; border: 1.5px solid var(--border);
+    text-align: center; font-size: 16px; font-weight: 600;
+    -webkit-appearance: none; appearance: none;
+    color: var(--text); outline: none;
+  }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+  input[type=number].inv {
+    background: var(--inv); border-color: #fcd34d; color: #92400e;
+  }
+  input[type=number].ord {
+    background: var(--ord); border-color: #93c5fd; color: #1e3a8a;
+  }
+  input[type=number]:focus { border-color: #374151; box-shadow: 0 0 0 2px rgba(55,65,81,0.15); }
+  input[type=number].inv:focus { border-color: var(--inv-border); box-shadow: 0 0 0 2px rgba(245,158,11,0.18); }
+  input[type=number].ord:focus { border-color: var(--ord-border); box-shadow: 0 0 0 2px rgba(59,130,246,0.18); }
+  .val-cell {
+    text-align: center; font-size: 11px; font-weight: 600;
+    padding: 2px; min-height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+  }
+  .val-cell.inv-val { color: #92400e; background: rgba(251,191,36,0.12); }
+  .val-cell.ord-val { color: #1e3a8a; background: rgba(147,197,253,0.2); }
+  .val-cell.zero { color: #d1d5db; background: transparent; font-weight: 400; }
+  .sec-footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 8px 14px 10px;
+    background: #f8faf9;
+    border-top: 1px solid var(--border);
+  }
+  .sec-tot-card {
+    border-radius: 7px; padding: 6px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sec-tot-card.inv { background: var(--inv); border: 1px solid #fcd34d; }
+  .sec-tot-card.ord { background: var(--ord); border: 1px solid #93c5fd; }
+  .stc-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+  .sec-tot-card.inv .stc-label { color: #92400e; }
+  .sec-tot-card.ord .stc-label { color: #1d4ed8; }
+  .stc-value { font-size: 14px; font-weight: 700; }
+  .sec-tot-card.inv .stc-value { color: #78350f; }
+  .sec-tot-card.ord .stc-value { color: #1e3a8a; }
+  .grand-footer {
+    background: #fff; margin-top: 6px; padding: 16px 14px 20px;
+    border-top: 3px solid var(--green);
+  }
+  .gf-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--green); margin-bottom: 10px;
+  }
+  .gf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .gf-card {
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; flex-direction: column;
+  }
+  .gf-card.inv { background: var(--inv); border: 2px solid var(--inv-border); }
+  .gf-card.ord { background: var(--ord); border: 2px solid var(--ord-border); }
+  .gf-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .gf-card.inv .gf-label { color: #92400e; }
+  .gf-card.ord .gf-label { color: #1d4ed8; }
+  .gf-value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+  .gf-card.inv .gf-value { color: #78350f; }
+  .gf-card.ord .gf-value { color: #1e3a8a; }
+  .gf-desc { font-size: 10px; margin-top: 3px; color: var(--muted); }
+  .action-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #fff; border-top: 1px solid var(--border);
+    padding: 10px 12px 22px;
+    display: grid; grid-template-columns: 1fr 2fr; gap: 8px;
+  }
+  .btn {
+    height: 48px; border-radius: 10px; border: none;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-clear { background: #f3f4f6; color: #374151; }
+  .btn-email { background: var(--orange); color: #fff; }
+  .btn-email:active { opacity: 0.88; transform: scale(0.98); }
+  .page-pad { height: 90px; }
+  @media print {
+    body { background: #fff; }
+    .topbar { position: static; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .action-bar { display: none; }
+    .page-pad { display: none; }
+    .sec-body.collapsed { display: block !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-title">East Coast Street Tacos</div>
+  <div class="topbar-sub">Weekly Event Order Form</div>
+  <div class="topbar-row">
+    <div class="field-group">
+      <span class="field-label">Week of:</span>
+      <input class="field-input" type="date" id="event-date">
+    </div>
+    <div class="field-group">
+      <span class="field-label">Completed by:</span>
+      <input class="field-input" type="text" id="completed-by" placeholder="Your name">
+    </div>
+  </div>
+</div>
+<div class="grand-summary">
+  <div class="gs-card inv">
+    <span class="gs-label">Total in stock value</span>
+    <span class="gs-value" id="gtotal-inv">$0</span>
+    <span class="gs-sub" id="gtotal-inv-items">0 items counted</span>
+  </div>
+  <div class="gs-card ord">
+    <span class="gs-label">Total order value</span>
+    <span class="gs-value" id="gtotal-ord">$0</span>
+    <span class="gs-sub" id="gtotal-ord-items">0 items to order</span>
+  </div>
+</div>
+<div class="legend">
+  <div class="leg"><div class="leg-dot inv"></div>In stock (qty)</div>
+  <div class="leg"><div class="leg-dot ord"></div>To order (cases)</div>
+  <div class="leg" style="margin-left:auto;font-size:10px;color:#9ca3af;">Tap section to collapse</div>
+</div>
+<div id="form-body"></div>
+<div class="grand-footer">
+  <div class="gf-title">Grand Totals</div>
+  <div class="gf-grid">
+    <div class="gf-card inv">
+      <span class="gf-label">In Stock Value</span>
+      <span class="gf-value" id="gf-inv">$0</span>
+      <span class="gf-desc">Current inventory worth</span>
+    </div>
+    <div class="gf-card ord">
+      <span class="gf-label">Order Total</span>
+      <span class="gf-value" id="gf-ord">$0</span>
+      <span class="gf-desc">Value of items to order</span>
+    </div>
+  </div>
+</div>
+<div class="page-pad"></div>
+<div class="action-bar">
+  <button class="btn btn-clear" onclick="clearAll()">Clear all</button>
+  <button class="btn btn-email" onclick="emailForm()">&#9993;&nbsp; Email to Manager</button>
+</div>
+<script>
+const SECTIONS = [
+  {name:"Packaging", items:[
+    {n:"SM Clamshell",u:"330/case",p:115},
+    {n:"#3 Boat",u:"—",p:48},
+    {n:"#5 Boat",u:"—",p:null},
+    {n:"LG Clamshell",u:"50/case",p:35},
+    {n:"Taco Holder",u:"1200/case",p:145},
+    {n:"Taco Spice",u:"bucket",p:50},
+    {n:"Churro Bags",u:"2000/case",p:300},
+    {n:"Straws",u:"400/case",p:10},
+    {n:"Takeout Bags",u:"300/case",p:150},
+    {n:"Case of Water",u:"40/case",p:10},
+    {n:"1/3 Pan Disposable",u:"300/case",p:95},
+    {n:"1/3 Pan Lid Disposable",u:"300/case",p:55},
+    {n:"1 oz Sauce Cups",u:"2500/case",p:35},
+    {n:"1 oz Lids",u:"2500/case",p:35},
+    {n:"4 oz Sauce Cups",u:"2500/case",p:85},
+    {n:"4 oz Lids",u:"2500/case",p:45},
+    {n:"XL Gloves",u:"1000/case",p:65},
+    {n:"Forks",u:"1000/case",p:35},
+    {n:"Napkins",u:"6000/case",p:35},
+    {n:"Salt",u:"50 lbs",p:50},
+    {n:"Sugar",u:"50 lbs",p:50},
+    {n:"Canola Oil",u:"35 lbs",p:35},
+    {n:"Fry Oil",u:"35 lbs",p:35},
+    {n:"Aluminum Foil Sheets",u:"12 boxes",p:100},
+    {n:"Nacho Cheese Sauce",u:"6 cans",p:50},
+    {n:"Plastic Wrap",u:"1 roll",p:40},
+    {n:"Trash Bags",u:"100/case",p:30},
+    {n:"Wax Paper",u:"10000/case",p:65},
+    {n:"6x6 Containers",u:"240/case",p:55},
+    {n:"Propane Tanks",u:"1 each",p:40},
+  ]},
+  {name:"Frozen Items", items:[
+    {n:"Buffalo Chicken Empanada",u:"40/case",p:50},
+    {n:"Colombian Steak Empanada",u:"50/case",p:50},
+    {n:"Pulled Pork Empanadas",u:"36/case",p:50},
+    {n:"Spinach & Cheese Empanadas",u:"21/case",p:50},
+    {n:"Churros",u:"50/case",p:35},
+    {n:"Arepas",u:"36/case",p:50},
+    {n:"Yucca Fries",u:"—",p:40},
+    {n:"French Fries",u:"20 lbs",p:40},
+    {n:"Avocado Pulp",u:"24 lbs",p:80},
+    {n:"Passion Fruit Pulp",u:"—",p:70},
+    {n:"Chicken Fingers",u:"10 lb case",p:60},
+    {n:"Pork",u:"—",p:65},
+  ]},
+  {name:"Refrigerated Cases", items:[
+    {n:"Salsa",u:"bucket",p:45},
+    {n:"Slaw",u:"bucket",p:50},
+    {n:"Pico de Gallo",u:"bucket",p:50},
+    {n:"Green Sauce",u:"bucket",p:50},
+    {n:"Red Sauce",u:"bucket",p:50},
+    {n:"Mojo",u:"bucket",p:50},
+    {n:"Crema",u:"bucket",p:50},
+    {n:"12 inch Tortilla",u:"118/case",p:30},
+    {n:"Chips",u:"20 lbs",p:40},
+    {n:"Jalapenos",u:"case",p:50},
+    {n:"Limes",u:"case",p:30},
+    {n:"Cilantro",u:"case",p:30},
+    {n:"6 inch Tortilla",u:"case",p:35},
+    {n:"Cheese",u:"20 lbs",p:60},
+  ]},
+  {name:"Cleaning Supplies", items:[
+    {n:"Dish Soap",u:"gallon",p:10},
+    {n:"Grill Cleaner Glitter",u:"gallon",p:10},
+    {n:"Degreaser",u:"gallon",p:10},
+    {n:"Towels",u:"each",p:1},
+  ]},
+  {name:"Meats & Proteins", items:[
+    {n:"Chicken",u:"bucket",p:100},
+    {n:"Steak",u:"bag",p:250},
+    {n:"Shrimp",u:"bucket",p:100},
+    {n:"Falafel",u:"tray",p:50},
+  ]},
+];
+
+function fmt(n){return n===0?"—":"$"+Math.round(n).toLocaleString("en-US");}
+function fmtAlways(n){return "$"+Math.round(n).toLocaleString("en-US");}
+function getV(id){return parseInt(document.getElementById(id)?.value)||0;}
+
+function recalc(){
+  let gInv=0, gOrd=0, gInvCount=0, gOrdCount=0;
+  SECTIONS.forEach((sec,si)=>{
+    let sInv=0, sOrd=0;
+    sec.items.forEach((item,ii)=>{
+      const p=item.p||0;
+      const iv=getV("inv-"+si+"-"+ii);
+      const ov=getV("ord-"+si+"-"+ii);
+      const ivVal=iv*p, ovVal=ov*p;
+      sInv+=ivVal; sOrd+=ovVal;
+      gInv+=ivVal; gOrd+=ovVal;
+      if(iv>0) gInvCount++;
+      if(ov>0) gOrdCount++;
+      const ivCell=document.getElementById("ival-"+si+"-"+ii);
+      const ovCell=document.getElementById("oval-"+si+"-"+ii);
+      if(ivCell){
+        ivCell.textContent=iv&&p?fmtAlways(ivVal):"—";
+        ivCell.className="val-cell inv-val"+(iv&&p?"":" zero");
+      }
+      if(ovCell){
+        ovCell.textContent=ov&&p?fmtAlways(ovVal):"—";
+        ovCell.className="val-cell ord-val"+(ov&&p?"":" zero");
+      }
+    });
+    const sfInv=document.getElementById("sf-inv-"+si);
+    const sfOrd=document.getElementById("sf-ord-"+si);
+    if(sfInv) sfInv.textContent=fmtAlways(sInv);
+    if(sfOrd) sfOrd.textContent=fmtAlways(sOrd);
+    const sub=document.getElementById("sub-"+si);
+    if(sub){
+      if(sInv||sOrd){
+        sub.innerHTML=(sInv?"Inv: "+fmtAlways(sInv):"")+(sInv&&sOrd?" &nbsp;·&nbsp; ":"")+(sOrd?"Ord: "+fmtAlways(sOrd):"");
+      } else { sub.textContent=""; }
+    }
+  });
+  document.getElementById("gtotal-inv").textContent=fmtAlways(gInv);
+  document.getElementById("gtotal-ord").textContent=fmtAlways(gOrd);
+  document.getElementById("gtotal-inv-items").textContent=gInvCount+" item"+(gInvCount!==1?"s":"")+" counted";
+  document.getElementById("gtotal-ord-items").textContent=gOrdCount+" item"+(gOrdCount!==1?"s":"")+" to order";
+  document.getElementById("gf-inv").textContent=fmtAlways(gInv);
+  document.getElementById("gf-ord").textContent=fmtAlways(gOrd);
+}
+
+function toggleSection(si){
+  document.getElementById("body-"+si).classList.toggle("collapsed");
+  document.getElementById("hdr-"+si).classList.toggle("collapsed");
+}
+
+function clearAll(){
+  if(!confirm("Clear all entries?")) return;
+  document.querySelectorAll("input[type=number]").forEach(e=>e.value="");
+  recalc();
+}
+
+function emailForm(){
+  const date=document.getElementById("event-date").value;
+  const by=document.getElementById("completed-by").value||"(not specified)";
+  const fmtDate=date?new Date(date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"}):"(no date)";
+  let body="EAST COAST STREET TACOS\nWeekly Order Form\n";
+  body+="Week of: "+fmtDate+"\nCompleted by: "+by+"\n";
+  body+="=".repeat(60)+"\n\n";
+  let gInv=0,gOrd=0,hasData=false;
+  SECTIONS.forEach((sec,si)=>{
+    const lines=[];
+    let sInv=0,sOrd=0;
+    sec.items.forEach((item,ii)=>{
+      const p=item.p||0;
+      const iv=getV("inv-"+si+"-"+ii);
+      const ov=getV("ord-"+si+"-"+ii);
+      if(iv||ov){
+        hasData=true;
+        const ivStr=iv?"Qty: "+iv+" ("+fmtAlways(iv*p)+")":"—";
+        const ovStr=ov?"Ord: "+ov+" ("+fmtAlways(ov*p)+")":"—";
+        const priceStr=p?"$"+p+"/unit":"price TBD";
+        lines.push("  "+item.n.substring(0,28).padEnd(29)+" ["+priceStr.padEnd(10)+"]  In Stock: "+ivStr.padEnd(18)+" To Order: "+ovStr);
+        sInv+=iv*p; sOrd+=ov*p;
+      }
+    });
+    if(lines.length){
+      body+="[ "+sec.name.toUpperCase()+" ]\n";
+      body+=lines.join("\n")+"\n";
+      body+="  Section In-Stock Value: "+fmtAlways(sInv)+"   Section Order Value: "+fmtAlways(sOrd)+"\n\n";
+      gInv+=sInv; gOrd+=sOrd;
+    }
+  });
+  if(!hasData){ alert("Please fill in at least one item before emailing."); return; }
+  body+="=".repeat(60)+"\n";
+  body+="GRAND TOTAL — IN STOCK VALUE:  "+fmtAlways(gInv)+"\n";
+  body+="GRAND TOTAL — ORDER VALUE:     "+fmtAlways(gOrd)+"\n";
+  body+="\n— Sent from ECST Weekly Order Form";
+  const subject=encodeURIComponent("ECST Weekly Order — "+fmtDate+(by!="(not specified)"?" — "+by:""));
+  window.location.href="mailto:jvisintin@eastcoaststreettacos.com?subject="+subject+"&body="+encodeURIComponent(body);
+}
+
+const fb=document.getElementById("form-body");
+SECTIONS.forEach((sec,si)=>{
+  const wrap=document.createElement("div");
+  wrap.className="section";
+  const hdr=document.createElement("div");
+  hdr.className="sec-header"; hdr.id="hdr-"+si;
+  hdr.innerHTML=`<span class="sec-title">${sec.name}</span><span class="sec-right"><span class="sec-subtotal" id="sub-${si}"></span><span class="chevron">&#9660;</span></span>`;
+  hdr.onclick=()=>toggleSection(si);
+  wrap.appendChild(hdr);
+  const body=document.createElement("div");
+  body.className="sec-body"; body.id="body-"+si;
+  const ch=document.createElement("div");
+  ch.className="col-hdr";
+  ch.innerHTML=`<span class="ch">Item</span><span class="ch">Price</span><span class="ch inv-hdr">In Stock</span><span class="ch val-hdr">Inv Value</span><span class="ch ord-hdr">To Order</span><span class="ch val-hdr">Ord Value</span>`;
+  body.appendChild(ch);
+  sec.items.forEach((item,ii)=>{
+    const row=document.createElement("div");
+    row.className="item-row"+(ii%2===1?" alt":"");
+    const priceDisplay=item.p?"$"+item.p:"TBD";
+    row.innerHTML=`
+      <div class="item-info">
+        <div class="item-name">${item.n}</div>
+        <div class="item-sub">${item.u}</div>
+      </div>
+      <div class="price-cell">${priceDisplay}</div>
+      <div class="cell">
+        <input type="number" class="inv" id="inv-${si}-${ii}" min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*" oninput="recalc()">
+      </div>
+      <div class="val-cell inv-val zero" id="ival-${si}-${ii}">—</div>
+      <div class="cell">
+        <input type="number" class="ord" id="ord-${si}-${ii}" min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*" oninput="recalc()">
+      </div>
+      <div class="val-cell ord-val zero" id="oval-${si}-${ii}">—</div>`;
+    body.appendChild(row);
+  });
+  const sf=document.createElement("div");
+  sf.className="sec-footer";
+  sf.innerHTML=`
+    <div class="sec-tot-card inv">
+      <span class="stc-label">Section in stock</span>
+      <span class="stc-value" id="sf-inv-${si}">$0</span>
+    </div>
+    <div class="sec-tot-card ord">
+      <span class="stc-label">Section order</span>
+      <span class="stc-value" id="sf-ord-${si}">$0</span>
+    </div>`;
+  body.appendChild(sf);
+  wrap.appendChild(body);
+  fb.appendChild(wrap);
+});
+document.getElementById("event-date").valueAsDate=new Date();
+recalc();
+</script>
+</body>
+</html>
