@@ -403,6 +403,18 @@ function clearAll(){
   recalc();
 }
 
+/* ── Google Sheets logging ── */
+function postToSheet(weekOf, completedBy, rows){
+  const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxg2lsKaukoyrq0do7Q4cm1nURdwb1BRa4mOvKWt5lxO_I_Tj4s4_XvG_h7JD66T6wS/exec';
+  const payload = {weekOf: weekOf, completedBy: completedBy, rows: rows};
+  fetch(SHEET_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).catch(err => console.warn('Sheet post failed:', err));
+}
+
 /* ── Excel export + email ── */
 function exportAndEmail(){
   const date = document.getElementById("event-date").value;
@@ -411,7 +423,6 @@ function exportAndEmail(){
     ? new Date(date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})
     : "(no date)";
 
-  // Check SheetJS loaded
   if(typeof XLSX === "undefined"){
     alert("Excel library not loaded yet. Please wait a moment and try again.");
     return;
@@ -422,15 +433,14 @@ function exportAndEmail(){
 
   // Sheet 1: All Items (full detail)
   const allRows = [];
-  // Title rows
   allRows.push(["EAST COAST STREET TACOS — Weekly Order Form"]);
   allRows.push(["Week of:", fmtDate, "", "Completed by:", by]);
   allRows.push([]);
-  // Header row
   allRows.push(["Section","Item","Unit","Unit Price","In Stock (Qty)","In Stock Value","To Order (Cases)","Order Value"]);
 
   let hasData = false;
   let gInv = 0, gOrd = 0;
+  const sheetRows = []; // for Google Sheets logging
 
   SECTIONS.forEach((sec,si)=>{
     let sInv=0, sOrd=0;
@@ -438,7 +448,19 @@ function exportAndEmail(){
       const p  = item.p || 0;
       const iv = getV("inv-"+si+"-"+ii);
       const ov = getV("ord-"+si+"-"+ii);
-      if(iv || ov) hasData = true;
+      if(iv || ov) {
+        hasData = true;
+        sheetRows.push({
+          section: sec.name,
+          item: item.n,
+          unit: item.u,
+          price: p || 0,
+          inStockQty: iv,
+          inStockValue: iv * p,
+          toOrderQty: ov,
+          orderValue: ov * p
+        });
+      }
       const ivVal = iv * p;
       const ovVal = ov * p;
       sInv += ivVal; sOrd += ovVal;
@@ -454,12 +476,10 @@ function exportAndEmail(){
         ov && p ? ovVal : ""
       ]);
     });
-    // Section subtotal row
     allRows.push(["","","","","Section Total →", sInv, "", sOrd]);
     allRows.push([]);
   });
 
-  // Grand total rows
   allRows.push(["","","","","","GRAND IN-STOCK VALUE", "", gInv]);
   allRows.push(["","","","","","GRAND ORDER VALUE",    "", gOrd]);
 
@@ -468,16 +488,16 @@ function exportAndEmail(){
     return;
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  // ── Post to Google Sheets (fire and forget) ──
+  postToSheet(date || fmtDate, by, sheetRows);
 
-  // Column widths
+  const ws = XLSX.utils.aoa_to_sheet(allRows);
   ws["!cols"] = [
     {wch:20},{wch:28},{wch:14},{wch:12},{wch:16},{wch:16},{wch:18},{wch:14}
   ];
-
   XLSX.utils.book_append_sheet(wb, ws, "Order Form");
 
-  // Sheet 2: Order Summary (only items with qty > 0)
+  // Sheet 2: Order Summary
   const sumRows = [];
   sumRows.push(["EAST COAST STREET TACOS — Order Summary"]);
   sumRows.push(["Week of:", fmtDate, "", "Completed by:", by]);
@@ -498,14 +518,10 @@ function exportAndEmail(){
   ws2["!cols"] = [{wch:20},{wch:28},{wch:14},{wch:12},{wch:18},{wch:14}];
   XLSX.utils.book_append_sheet(wb, ws2, "Order Summary");
 
-  // ── Generate filename ──
   const dateSlug = date ? date.replace(/-/g,"") : "nodate";
   const fileName = "ECST_Order_" + dateSlug + ".xlsx";
-
-  // ── Download the .xlsx file ──
   XLSX.writeFile(wb, fileName);
 
-  // ── Open email client after short delay (let download start) ──
   setTimeout(()=>{
     const subject = encodeURIComponent("ECST Weekly Order — " + fmtDate + (by !== "(not specified)" ? " — " + by : ""));
     const body = encodeURIComponent(
